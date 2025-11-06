@@ -5,6 +5,7 @@ export interface IStorage {
   getAllUninstallRequests(): Promise<UninstallRequest[]>;
   getUninstallRequest(programName: string): Promise<UninstallRequest | undefined>;
   resetAllRequests(): Promise<void>;
+  deleteRequest(programName: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -44,6 +45,11 @@ export class MemStorage implements IStorage {
 
   async resetAllRequests(): Promise<void> {
     this.requests.clear();
+  }
+
+  async deleteRequest(programName: string): Promise<boolean> {
+    const normalizedName = programName.toLowerCase().trim();
+    return this.requests.delete(normalizedName);
   }
 }
 

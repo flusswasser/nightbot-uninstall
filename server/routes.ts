@@ -38,6 +38,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/uninstall/:programName", async (req, res) => {
+    const programName = req.params.programName;
+    
+    if (!programName || programName.trim() === '') {
+      return res.status(400).json({ error: "Program name is required" });
+    }
+
+    try {
+      const deleted = await storage.deleteRequest(decodeURIComponent(programName));
+      if (deleted) {
+        res.json({ success: true, message: "Request deleted" });
+      } else {
+        res.status(404).json({ error: "Request not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete request" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

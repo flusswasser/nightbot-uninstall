@@ -18,6 +18,79 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { UninstallRequest } from "@shared/schema";
 
+function RequestRow({ request, index }: { request: UninstallRequest; index: number }) {
+  const { toast } = useToast();
+  
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('DELETE', `/api/uninstall/${encodeURIComponent(request.programName)}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/uninstall/all'] });
+      toast({
+        title: "Success",
+        description: `Deleted request for ${request.programName}`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <TableRow data-testid={`row-request-${index}`}>
+      <TableCell className="font-medium text-muted-foreground">
+        {index + 1}
+      </TableCell>
+      <TableCell className="font-medium" data-testid={`text-program-${index}`}>
+        {request.programName}
+      </TableCell>
+      <TableCell className="text-right font-bold" data-testid={`text-count-${index}`}>
+        {request.count}
+      </TableCell>
+      <TableCell>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              data-testid={`button-delete-${index}`}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this request?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the uninstall request for "{request.programName}". This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid={`button-cancel-delete-${index}`}>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={() => deleteMutation.mutate()}
+                data-testid={`button-confirm-delete-${index}`}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 export default function RequestsTable() {
   const { toast } = useToast();
   const { data: requests, isLoading } = useQuery<UninstallRequest[]>({
@@ -104,21 +177,16 @@ export default function RequestsTable() {
                 <TableHead className="w-12">#</TableHead>
                 <TableHead>Program Name</TableHead>
                 <TableHead className="text-right">Requests</TableHead>
+                <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {requests.map((request, index) => (
-                <TableRow key={request.id} data-testid={`row-request-${index}`}>
-                  <TableCell className="font-medium text-muted-foreground">
-                    {index + 1}
-                  </TableCell>
-                  <TableCell className="font-medium" data-testid={`text-program-${index}`}>
-                    {request.programName}
-                  </TableCell>
-                  <TableCell className="text-right font-bold" data-testid={`text-count-${index}`}>
-                    {request.count}
-                  </TableCell>
-                </TableRow>
+                <RequestRow 
+                  key={request.id} 
+                  request={request} 
+                  index={index}
+                />
               ))}
             </TableBody>
           </Table>
