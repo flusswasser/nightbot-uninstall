@@ -16,10 +16,10 @@ export default function UninstallTester() {
     mutationFn: async (programName: string) => {
       const res = await fetch(`/api/uninstall?program=${encodeURIComponent(programName)}`);
       if (!res.ok) throw new Error("Failed to process request");
-      return res.json();
+      return res.text();
     },
     onSuccess: (data) => {
-      setResponse(data.message);
+      setResponse(data);
       queryClient.invalidateQueries({ queryKey: ['/api/uninstall/all'] });
       toast({
         title: "Success",
