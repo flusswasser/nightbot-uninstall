@@ -1,5 +1,5 @@
 import express from 'express';
-import { Client, ChannelType, EmbedBuilder } from 'discord.js';
+import { Client, ChannelType, EmbedBuilder, ActivityType } from 'discord.js';
 import axios from 'axios';
 
 interface YouTubeSubscription {
@@ -189,6 +189,7 @@ async function initializeBot() {
 
     client.on('ready', () => {
       console.log(`✓ Discord bot logged in as ${client?.user?.tag}`);
+      client?.user?.setActivity('eating cookies', { type: ActivityType.Custom });
       setInterval(checkForNewVideos, CHECK_INTERVAL);
     });
 
