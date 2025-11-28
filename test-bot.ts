@@ -70,13 +70,13 @@ async function testBot() {
   // Test 3: Test YouTube API
   console.log('📋 Test 3: Testing YouTube API');
   try {
-    // Test with a well-known channel (MrBeast)
+    // Test with user's channel
     const response = await axios.get(
       'https://www.googleapis.com/youtube/v3/search',
       {
         params: {
           part: 'snippet',
-          channelId: 'UCX6OQ9kcY8nj0j-0I7Ey5w',
+          channelId: 'UCR_QMbWg_LXQIdqQMhao0IQ',
           order: 'date',
           maxResults: 1,
           key: YOUTUBE_API_KEY,
