@@ -1,6 +1,6 @@
 import { uninstallRequests, type UninstallRequest } from "@shared/schema";
 import { db } from "./db";
-import { eq, sql } from "drizzle-orm";
+import { eq, desc, ilike } from "drizzle-orm";
 
 export interface IStorage {
   incrementUninstallCount(programName: string): Promise<UninstallRequest>;
@@ -12,16 +12,16 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   async incrementUninstallCount(programName: string): Promise<UninstallRequest> {
-    const normalizedName = programName.toLowerCase().trim();
+    const trimmedName = programName.trim();
     
-    // Try to find existing request
-    const existing = await this.getUninstallRequest(programName);
+    // Try to find existing request (case-insensitive)
+    const existing = await this.getUninstallRequest(trimmedName);
     
     if (existing) {
       // Increment existing count
       const [updated] = await db
         .update(uninstallRequests)
-        .set({ count: sql`${uninstallRequests.count} + 1` })
+        .set({ count: existing.count + 1 })
         .where(eq(uninstallRequests.id, existing.id))
         .returning();
       return updated;
@@ -30,7 +30,7 @@ export class DatabaseStorage implements IStorage {
       const [newRequest] = await db
         .insert(uninstallRequests)
         .values({
-          programName: programName.trim(),
+          programName: trimmedName,
           count: 1,
         })
         .returning();
@@ -42,17 +42,17 @@ export class DatabaseStorage implements IStorage {
     const requests = await db
       .select()
       .from(uninstallRequests)
-      .orderBy(sql`${uninstallRequests.count} DESC`);
+      .orderBy(desc(uninstallRequests.count));
     return requests;
   }
 
   async getUninstallRequest(programName: string): Promise<UninstallRequest | undefined> {
-    const normalizedName = programName.toLowerCase().trim();
-    const [request] = await db
+    const trimmedName = programName.trim();
+    const requests = await db
       .select()
       .from(uninstallRequests)
-      .where(sql`LOWER(TRIM(${uninstallRequests.programName})) = ${normalizedName}`);
-    return request || undefined;
+      .where(ilike(uninstallRequests.programName, trimmedName));
+    return requests[0] || undefined;
   }
 
   async resetAllRequests(): Promise<void> {
@@ -60,10 +60,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteRequest(programName: string): Promise<boolean> {
-    const normalizedName = programName.toLowerCase().trim();
+    const trimmedName = programName.trim();
     const result = await db
       .delete(uninstallRequests)
-      .where(sql`LOWER(TRIM(${uninstallRequests.programName})) = ${normalizedName}`)
+      .where(ilike(uninstallRequests.programName, trimmedName))
       .returning();
     return result.length > 0;
   }
