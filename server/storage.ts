@@ -1,4 +1,6 @@
-import { type UninstallRequest } from "@shared/schema";
+import { uninstallRequests, type UninstallRequest } from "@shared/schema";
+import { db } from "./db";
+import { eq, sql } from "drizzle-orm";
 
 export interface IStorage {
   incrementUninstallCount(programName: string): Promise<UninstallRequest>;
@@ -8,49 +10,63 @@ export interface IStorage {
   deleteRequest(programName: string): Promise<boolean>;
 }
 
-export class MemStorage implements IStorage {
-  private requests: Map<string, UninstallRequest>;
-
-  constructor() {
-    this.requests = new Map();
-  }
-
+export class DatabaseStorage implements IStorage {
   async incrementUninstallCount(programName: string): Promise<UninstallRequest> {
     const normalizedName = programName.toLowerCase().trim();
-    const existing = this.requests.get(normalizedName);
+    
+    // Try to find existing request
+    const existing = await this.getUninstallRequest(programName);
     
     if (existing) {
-      existing.count++;
-      this.requests.set(normalizedName, existing);
-      return existing;
+      // Increment existing count
+      const [updated] = await db
+        .update(uninstallRequests)
+        .set({ count: sql`${uninstallRequests.count} + 1` })
+        .where(eq(uninstallRequests.id, existing.id))
+        .returning();
+      return updated;
     } else {
-      const newRequest: UninstallRequest = {
-        id: crypto.randomUUID(),
-        programName: programName.trim(),
-        count: 1,
-      };
-      this.requests.set(normalizedName, newRequest);
+      // Create new request
+      const [newRequest] = await db
+        .insert(uninstallRequests)
+        .values({
+          programName: programName.trim(),
+          count: 1,
+        })
+        .returning();
       return newRequest;
     }
   }
 
   async getAllUninstallRequests(): Promise<UninstallRequest[]> {
-    return Array.from(this.requests.values()).sort((a, b) => b.count - a.count);
+    const requests = await db
+      .select()
+      .from(uninstallRequests)
+      .orderBy(sql`${uninstallRequests.count} DESC`);
+    return requests;
   }
 
   async getUninstallRequest(programName: string): Promise<UninstallRequest | undefined> {
     const normalizedName = programName.toLowerCase().trim();
-    return this.requests.get(normalizedName);
+    const [request] = await db
+      .select()
+      .from(uninstallRequests)
+      .where(sql`LOWER(TRIM(${uninstallRequests.programName})) = ${normalizedName}`);
+    return request || undefined;
   }
 
   async resetAllRequests(): Promise<void> {
-    this.requests.clear();
+    await db.delete(uninstallRequests);
   }
 
   async deleteRequest(programName: string): Promise<boolean> {
     const normalizedName = programName.toLowerCase().trim();
-    return this.requests.delete(normalizedName);
+    const result = await db
+      .delete(uninstallRequests)
+      .where(sql`LOWER(TRIM(${uninstallRequests.programName})) = ${normalizedName}`)
+      .returning();
+    return result.length > 0;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
