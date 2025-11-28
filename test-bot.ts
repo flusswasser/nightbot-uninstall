@@ -70,32 +70,58 @@ async function testBot() {
   // Test 3: Test YouTube API
   console.log('📋 Test 3: Testing YouTube API');
   try {
-    // Test with MrBeast channel
-    const response = await axios.get(
-      'https://www.googleapis.com/youtube/v3/search',
+    const channelId = 'UCX6OQ9kcY8nj0j-0I7Ey5w'; // MrBeast
+    
+    // First get the channel info to find its uploads playlist
+    const channelResponse = await axios.get(
+      'https://www.googleapis.com/youtube/v3/channels',
+      {
+        params: {
+          part: 'contentDetails',
+          id: channelId,
+          key: YOUTUBE_API_KEY,
+        },
+      }
+    );
+
+    if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
+      console.log('❌ Channel not found');
+      process.exit(1);
+    }
+
+    const uploadsPlaylistId = channelResponse.data.items[0].contentDetails.relatedPlaylists.uploads;
+
+    // Now get videos from the uploads playlist
+    const videosResponse = await axios.get(
+      'https://www.googleapis.com/youtube/v3/playlistItems',
       {
         params: {
           part: 'snippet',
-          channelId: 'UCX6OQ9kcY8nj0j-0I7Ey5w',
-          order: 'date',
+          playlistId: uploadsPlaylistId,
           maxResults: 1,
           key: YOUTUBE_API_KEY,
         },
       }
     );
 
-    if (response.data.items && response.data.items.length > 0) {
-      const video = response.data.items[0];
+    if (videosResponse.data.items && videosResponse.data.items.length > 0) {
+      const video = videosResponse.data.items[0];
       console.log('✓ YouTube API is working');
       console.log(`✓ Latest video: ${video.snippet.title}`);
-      console.log(`✓ Channel: ${video.snippet.channelTitle}\n`);
+      console.log(`✓ Channel: ${video.snippet.channelTitle}`);
+      console.log(`✓ Published: ${video.snippet.publishedAt}\n`);
     } else {
-      console.log('❌ No videos found');
+      console.log('❌ No videos found in playlist');
       process.exit(1);
     }
   } catch (error) {
     console.log('❌ YouTube API Failed');
-    console.log(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    if (error instanceof Error) {
+      console.log(`Error: ${error.message}`);
+      if ('response' in error && error.response) {
+        console.log('Response:', (error.response as any).data);
+      }
+    }
     process.exit(1);
   }
 
