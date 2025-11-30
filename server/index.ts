@@ -195,10 +195,14 @@ async function initializeBot() {
 
     client.on('messageCreate', async (message) => {
       if (message.author.bot) return;
+      
+      console.log(`Message received: "${message.content}" from ${message.author.tag}`);
+      
       if (!message.content.startsWith('!')) return;
 
       const args = message.content.slice(1).split(/ +/);
       const command = args.shift()?.toLowerCase();
+      console.log(`Command: ${command}, Args: ${args.join(', ')}`);
 
       if (command === 'subscribe') {
         const youtubeChannelId = args[0];
