@@ -633,7 +633,7 @@ async function initializeBot() {
       } else if (command === 'dino') {
         await message.reply('<a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939>');
       } else if (command === 'cookie') {
-        await message.reply(`Thanks for the cookie ${message.author.username}.`);
+        await message.reply(`Thanks for the cookie **${message.author.username}**. <:ellenaRibert1:1183615831721123851>`);
       }
       } catch (error) {
         console.error('Error handling message:', error);
