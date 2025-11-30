@@ -627,13 +627,13 @@ async function initializeBot() {
 
         await message.reply(testMessage);
       } else if (command === 'nyoom') {
-        await message.reply(':ellenaNYOOM: :ellenaNYOOM: :ellenaNYOOM: :ellenaNYOOM: :ellenaNYOOM: :ellenaNYOOM: :ellenaNYOOM:');
+        await message.reply('<a:ellenaNYOOM:1141667448815362188> <a:ellenaNYOOM:1141667448815362188> <a:ellenaNYOOM:1141667448815362188> <a:ellenaNYOOM:1141667448815362188> <a:ellenaNYOOM:1141667448815362188> <a:ellenaNYOOM:1141667448815362188> <a:ellenaNYOOM:1141667448815362188>');
       } else if (command === 'wiggle') {
-        await message.reply(':ellenaWIGGLE: :ellenaWIGGLE: :ellenaWIGGLE: :ellenaWIGGLE: :ellenaWIGGLE: :ellenaWIGGLE: :ellenaWIGGLE:');
+        await message.reply('<a:ellenaNYOOM:1141667448815362188> <a:ellenaNYOOM:1141667448815362188> <a:ellenaNYOOM:1141667448815362188> <a:ellenaNYOOM:1141667448815362188> <a:ellenaNYOOM:1141667448815362188> <a:ellenaNYOOM:1141667448815362188> <a:ellenaNYOOM:1141667448815362188>');
       } else if (command === 'dino') {
         await message.reply('<a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939>');
-      } else if (command === 'test') {
-        await message.reply(':ellena6BLANKIE: :ellena6DINO: :ellena6FRIEND: :ellena6NYOOM: :ellena6PANDA:');
+      } else if (command === 'ribert') {
+        await message.reply('<:ellena6FRIEND:1321583629754699786> <:ellena6FRIEND:1321583629754699786> <:ellena6FRIEND:1321583629754699786> <:ellena6FRIEND:1321583629754699786> <:ellena6FRIEND:1321583629754699786> <:ellena6FRIEND:1321583629754699786> <:ellena6FRIEND:1321583629754699786>');
       }
       } catch (error) {
         console.error('Error handling message:', error);
