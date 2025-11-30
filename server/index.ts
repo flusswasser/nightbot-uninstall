@@ -185,7 +185,9 @@ async function checkForNewVideos() {
 // Initialize Discord bot if credentials exist
 async function initializeBot() {
   if (DISCORD_TOKEN && YOUTUBE_API_KEY && !client) {
-    client = new Client({ intents: ['Guilds', 'DirectMessages', 'MessageContent'] });
+    client = new Client({ 
+      intents: ['Guilds', 'GuildMessages', 'DirectMessages', 'MessageContent'] 
+    });
 
     client.on('clientReady', () => {
       console.log(`✓ Discord bot logged in as ${client?.user?.tag}`);
@@ -194,17 +196,18 @@ async function initializeBot() {
     });
 
     client.on('messageCreate', async (message) => {
-      if (message.author.bot) return;
-      
-      console.log(`Message received: "${message.content}" from ${message.author.tag}`);
-      
-      if (!message.content.startsWith('!')) return;
+      try {
+        if (message.author.bot) return;
+        
+        console.log(`Message received: "${message.content}" from ${message.author.tag} in ${message.guild?.name || 'DM'}`);
+        
+        if (!message.content.startsWith('!')) return;
 
-      const args = message.content.slice(1).split(/ +/);
-      const command = args.shift()?.toLowerCase();
-      console.log(`Command: ${command}, Args: ${args.join(', ')}`);
+        const args = message.content.slice(1).split(/ +/);
+        const command = args.shift()?.toLowerCase();
+        console.log(`Command: ${command}, Args: ${args.join(', ')}`);
 
-      if (command === 'subscribe') {
+        if (command === 'subscribe') {
         const youtubeChannelId = args[0];
         if (!youtubeChannelId) {
           await message.reply('**Usage:** `!subscribe <YOUTUBE_CHANNEL_ID>`');
@@ -254,9 +257,13 @@ async function initializeBot() {
         const removed = subscriptions.splice(index, 1)[0];
         await message.reply(`✓ Unsubscribed from **${removed.channelName}**`);
       }
+      } catch (error) {
+        console.error('Error handling message:', error);
+      }
     });
 
-    client.on('error', (error) => console.error('Discord error:', error));
+    client.on('error', (error) => console.error('Discord client error:', error));
+    client.on('warn', (warning) => console.warn('Discord warning:', warning));
     await client.login(DISCORD_TOKEN);
   }
 }
