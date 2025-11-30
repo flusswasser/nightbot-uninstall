@@ -608,6 +608,23 @@ async function initializeBot() {
         const removed = twitchSubscriptions.splice(index, 1)[0];
         saveSubscriptions();
         await message.reply(`✓ Unsubscribed from **${removed.twitchDisplayName}**`);
+      } else if (command === 'latest') {
+        const youtubeChannelId = args[0];
+        if (!youtubeChannelId) {
+          await message.reply('**Usage:** `!latest <YOUTUBE_CHANNEL_ID>`');
+          return;
+        }
+
+        const video = await getLatestVideo(youtubeChannelId);
+        if (!video) {
+          await message.reply('❌ Could not find YouTube channel or videos.');
+          return;
+        }
+
+        const videoUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
+        const testMessage = `**New Video from ${video.channelTitle}**\n${video.title}\n\n${videoUrl}`;
+
+        await message.reply(testMessage);
       }
       } catch (error) {
         console.error('Error handling message:', error);
