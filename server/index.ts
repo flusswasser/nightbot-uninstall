@@ -625,6 +625,12 @@ async function initializeBot() {
         const testMessage = `**${video.channelTitle} Posted A New Video**\n${video.title}\n\n${videoUrl}`;
 
         await message.reply(testMessage);
+      } else if (command === 'nyoom') {
+        await message.reply(':ellenaNYOOM: :ellenaNYOOM: :ellenaNYOOM: :ellenaNYOOM: :ellenaNYOOM: :ellenaNYOOM: :ellenaNYOOM:');
+      } else if (command === 'wiggle') {
+        await message.reply(':ellenaWIGGLE: :ellenaWIGGLE: :ellenaWIGGLE: :ellenaWIGGLE: :ellenaWIGGLE: :ellenaWIGGLE: :ellenaWIGGLE:');
+      } else if (command === 'dino') {
+        await message.reply(':ellenaDINO: :ellenaDINO: :ellenaDINO: :ellenaDINO: :ellenaDINO: :ellenaDINO: :ellenaDINO:');
       }
       } catch (error) {
         console.error('Error handling message:', error);
