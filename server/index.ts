@@ -127,6 +127,7 @@ async function getLatestVideo(channelId: string) {
 
     if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
       console.error(`Channel not found: ${channelId}`);
+      console.error(`API Response:`, channelResponse.data);
       return null;
     }
 
@@ -159,7 +160,13 @@ async function getLatestVideo(channelId: string) {
     }
     return null;
   } catch (error) {
-    console.error(`Error fetching videos for channel ${channelId}:`, error);
+    console.error(`Error fetching videos for channel ${channelId}:`);
+    if (error instanceof Error) {
+      console.error(`Error message: ${error.message}`);
+    }
+    if (error && typeof error === 'object' && 'response' in error) {
+      console.error(`API Error:`, (error as any).response?.data);
+    }
     return null;
   }
 }
