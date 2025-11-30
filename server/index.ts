@@ -632,8 +632,6 @@ async function initializeBot() {
         await message.reply('<a:ellenaWIGGLE:1045838228172832798> <a:ellenaWIGGLE:1045838228172832798> <a:ellenaWIGGLE:1045838228172832798> <a:ellenaWIGGLE:1045838228172832798> <a:ellenaWIGGLE:1045838228172832798> <a:ellenaWIGGLE:1045838228172832798> <a:ellenaWIGGLE:1045838228172832798>');
       } else if (command === 'dino') {
         await message.reply('<a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939> <a:ellenaDINO:1105677378132389939>');
-      } else if (command === 'ribert') {
-        await message.reply('<:ellena6FRIEND:1321583629754699786> <:ellena6FRIEND:1321583629754699786> <:ellena6FRIEND:1321583629754699786> <:ellena6FRIEND:1321583629754699786> <:ellena6FRIEND:1321583629754699786> <:ellena6FRIEND:1321583629754699786> <:ellena6FRIEND:1321583629754699786>');
       }
       } catch (error) {
         console.error('Error handling message:', error);
