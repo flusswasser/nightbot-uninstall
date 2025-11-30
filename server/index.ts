@@ -30,7 +30,6 @@ let twitchSubscriptions: TwitchSubscription[] = [];
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
-const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 const CHECK_INTERVAL = 300000;
 const SUBSCRIPTIONS_FILE = path.join(process.cwd(), 'subscriptions.json');
 const TWITCH_SUBSCRIPTIONS_FILE = path.join(process.cwd(), 'twitch_subscriptions.json');
@@ -44,6 +43,8 @@ interface TwitchOAuthToken {
 }
 
 let twitchOAuthToken: TwitchOAuthToken | null = null;
+let twitchDeviceAuthUrl: string | null = null;
+let twitchDeviceCode: string | null = null;
 
 // Load subscriptions and Twitch token from file
 function loadSubscriptions() {
@@ -81,24 +82,36 @@ function saveSubscriptions() {
   }
 }
 
-// Get a valid Twitch OAuth token (refresh if needed)
-async function getTwitchAccessToken(): Promise<string | null> {
-  if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) {
-    return null;
-  }
+// Get Twitch device code URL for authentication
+async function initiateTwitchDeviceAuth(): Promise<void> {
+  if (!TWITCH_CLIENT_ID) return;
 
-  // Check if token is expired
-  if (twitchOAuthToken && twitchOAuthToken.expires_at > Date.now()) {
-    return twitchOAuthToken.access_token;
-  }
+  try {
+    const response = await axios.post('https://id.twitch.tv/oauth2/device', null, {
+      params: {
+        client_id: TWITCH_CLIENT_ID,
+        scopes: 'user:read:email',
+      },
+    });
 
-  // Request new token using client credentials flow
+    twitchDeviceCode = response.data.device_code;
+    twitchDeviceAuthUrl = response.data.verification_uri;
+    console.log('✓ Twitch device code generated. Auth URL:', twitchDeviceAuthUrl);
+  } catch (error) {
+    console.error('Error initiating Twitch device auth:', error);
+  }
+}
+
+// Poll for device code authorization completion
+async function pollTwitchDeviceAuth(): Promise<boolean> {
+  if (!TWITCH_CLIENT_ID || !twitchDeviceCode) return false;
+
   try {
     const response = await axios.post('https://id.twitch.tv/oauth2/token', null, {
       params: {
         client_id: TWITCH_CLIENT_ID,
-        client_secret: TWITCH_CLIENT_SECRET,
-        grant_type: 'client_credentials',
+        device_id: twitchDeviceCode,
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
       },
     });
 
@@ -109,12 +122,39 @@ async function getTwitchAccessToken(): Promise<string | null> {
       expires_at: Date.now() + response.data.expires_in * 1000,
     };
     saveSubscriptions();
-    console.log('✓ Obtained new Twitch OAuth token');
-    return twitchOAuthToken.access_token;
-  } catch (error) {
-    console.error('Error obtaining Twitch OAuth token:', error);
+    console.log('✓ Obtained Twitch OAuth token via device flow');
+    return true;
+  } catch (error: any) {
+    if (error.response?.data?.error === 'authorization_pending') {
+      // Still waiting for user authorization
+      return false;
+    }
+    console.error('Error polling Twitch device auth:', error);
+    return false;
+  }
+}
+
+// Get a valid Twitch OAuth token (refresh if needed)
+async function getTwitchAccessToken(): Promise<string | null> {
+  if (!TWITCH_CLIENT_ID) {
     return null;
   }
+
+  // Check if token is expired
+  if (twitchOAuthToken && twitchOAuthToken.expires_at > Date.now()) {
+    return twitchOAuthToken.access_token;
+  }
+
+  // If we don't have a token yet, try polling or initiating device flow
+  if (!twitchOAuthToken) {
+    if (!twitchDeviceCode) {
+      await initiateTwitchDeviceAuth();
+    } else {
+      await pollTwitchDeviceAuth();
+    }
+  }
+
+  return twitchOAuthToken?.access_token || null;
 }
 
 // Setup page HTML
@@ -169,13 +209,13 @@ const setupHTML = `
     </div>
 
     <div class="step">
-      <h2>Step 3: Get Twitch OAuth Credentials</h2>
+      <h2>Step 3: Get Twitch Client ID</h2>
       <p>1. Go to <a href="https://dev.twitch.tv/console/apps" target="_blank">Twitch Developer Console</a></p>
       <p>2. Create a new application</p>
-      <p>3. Go to "OAuth" tab and copy your Client ID and Client Secret</p>
+      <p>3. Copy your Client ID</p>
       <p>4. In Replit Secrets, add:</p>
       <div class="code">TWITCH_CLIENT_ID = your_client_id</div>
-      <div class="code">TWITCH_CLIENT_SECRET = your_client_secret</div>
+      <p>5. When you first use a Twitch command, the bot will provide an authorization URL to complete the device flow</p>
     </div>
 
     <div class="step">
@@ -428,8 +468,13 @@ async function initializeBot() {
       console.log(`✓ Discord bot logged in as ${client?.user?.tag}`);
       client?.user?.setActivity('Eating Cookies', { type: ActivityType.Custom });
       setInterval(checkForNewVideos, CHECK_INTERVAL);
-      if (TWITCH_CLIENT_ID && TWITCH_CLIENT_SECRET) {
-        setInterval(checkForLiveStreams, CHECK_INTERVAL);
+      if (TWITCH_CLIENT_ID) {
+        // Try to load existing token or initiate device auth
+        if (twitchOAuthToken) {
+          setInterval(checkForLiveStreams, CHECK_INTERVAL);
+        } else {
+          initiateTwitchDeviceAuth();
+        }
       }
     });
 
@@ -497,8 +542,13 @@ async function initializeBot() {
         saveSubscriptions();
         await message.reply(`✓ Unsubscribed from **${removed.channelName}**`);
       } else if (command === 'tsub') {
-        if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) {
+        if (!TWITCH_CLIENT_ID) {
           await message.reply('❌ Twitch integration not configured.');
+          return;
+        }
+        
+        if (!twitchOAuthToken && twitchDeviceAuthUrl) {
+          await message.reply(`⚠️ Twitch authorization needed!\nGo to: ${twitchDeviceAuthUrl} to authorize the bot.`);
           return;
         }
         const twitchUsername = args[0];
