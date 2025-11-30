@@ -30,7 +30,8 @@ let twitchSubscriptions: TwitchSubscription[] = [];
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
-const CHECK_INTERVAL = 300000;
+const YOUTUBE_CHECK_INTERVAL = 300000; // 5 minutes
+const TWITCH_CHECK_INTERVAL = 150000; // 150 seconds
 const SUBSCRIPTIONS_FILE = path.join(process.cwd(), 'subscriptions.json');
 const TWITCH_SUBSCRIPTIONS_FILE = path.join(process.cwd(), 'twitch_subscriptions.json');
 const TWITCH_TOKEN_FILE = path.join(process.cwd(), 'twitch_token.json');
@@ -462,11 +463,11 @@ async function initializeBot() {
     client.on('clientReady', () => {
       console.log(`✓ Discord bot logged in as ${client?.user?.tag}`);
       client?.user?.setActivity('Eating Cookies', { type: ActivityType.Custom });
-      setInterval(checkForNewVideos, CHECK_INTERVAL);
+      setInterval(checkForNewVideos, YOUTUBE_CHECK_INTERVAL);
       if (TWITCH_CLIENT_ID) {
         // Try to load existing token or initiate device auth
         if (twitchOAuthToken) {
-          setInterval(checkForLiveStreams, CHECK_INTERVAL);
+          setInterval(checkForLiveStreams, TWITCH_CHECK_INTERVAL);
         } else {
           initiateTwitchDeviceAuth();
         }
