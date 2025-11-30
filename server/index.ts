@@ -335,7 +335,7 @@ async function notifyNewVideo(
     }
 
     const videoUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
-    const message = `**New Video from ${video.channelTitle}**\n${video.title}\n\n${videoUrl}`;
+    const message = `**${video.channelTitle} Posted A New Video**\n${video.title}\n\n${videoUrl}`;
 
     await channel.send(message);
     console.log(`✓ Notified about video: ${video.title}`);
@@ -622,7 +622,7 @@ async function initializeBot() {
         }
 
         const videoUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
-        const testMessage = `**New Video from ${video.channelTitle}**\n${video.title}\n\n${videoUrl}`;
+        const testMessage = `**${video.channelTitle} Posted A New Video**\n${video.title}\n\n${videoUrl}`;
 
         await message.reply(testMessage);
       }
