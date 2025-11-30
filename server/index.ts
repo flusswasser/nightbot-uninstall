@@ -187,7 +187,7 @@ async function initializeBot() {
   if (DISCORD_TOKEN && YOUTUBE_API_KEY && !client) {
     client = new Client({ intents: ['Guilds', 'DirectMessages', 'MessageContent'] });
 
-    client.on('ready', () => {
+    client.on('clientReady', () => {
       console.log(`✓ Discord bot logged in as ${client?.user?.tag}`);
       client?.user?.setActivity('eating cookies', { type: ActivityType.Custom });
       setInterval(checkForNewVideos, CHECK_INTERVAL);
