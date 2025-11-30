@@ -632,7 +632,7 @@ async function initializeBot() {
       } else if (command === 'dino') {
         await message.reply(':ellenaDINO: :ellenaDINO: :ellenaDINO: :ellenaDINO: :ellenaDINO: :ellenaDINO: :ellenaDINO:');
       } else if (command === 'test') {
-        await message.reply('ellena6BLANKIE ellena6DINO ellena6FRIEND ellena6NYOOM ellena6PANDA');
+        await message.reply(':ellena6BLANKIE: :ellena6DINO: :ellena6FRIEND: :ellena6NYOOM: :ellena6PANDA:');
       }
       } catch (error) {
         console.error('Error handling message:', error);
