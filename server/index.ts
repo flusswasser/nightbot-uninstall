@@ -30,14 +30,18 @@ let twitchSubscriptions: TwitchSubscription[] = [];
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
+const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 const YOUTUBE_CHECK_INTERVAL = 300000; // 5 minutes
 const TWITCH_CHECK_INTERVAL = 150000; // 150 seconds
+const REDIRECT_URI = process.env.REPL_ID ? `https://${process.env.REPL_ID}.id.repl.co/twitch/callback` : 'http://localhost:5000/twitch/callback';
+
 const SUBSCRIPTIONS_FILE = path.join(process.cwd(), 'subscriptions.json');
 const TWITCH_SUBSCRIPTIONS_FILE = path.join(process.cwd(), 'twitch_subscriptions.json');
 const TWITCH_TOKEN_FILE = path.join(process.cwd(), 'twitch_token.json');
 
 interface TwitchOAuthToken {
   access_token: string;
+  refresh_token?: string;
   token_type: string;
   expires_in: number;
   expires_at: number;
@@ -150,20 +154,44 @@ async function getTwitchAccessToken(): Promise<string | null> {
   }
 
   // Check if token is expired
-  if (twitchOAuthToken && twitchOAuthToken.expires_at > Date.now()) {
-    return twitchOAuthToken.access_token;
-  }
+  if (twitchOAuthToken) {
+    if (twitchOAuthToken.expires_at > Date.now() + 60000) { // Buffer of 1 minute
+      return twitchOAuthToken.access_token;
+    }
+    
+    // If we have a refresh token, try to refresh
+    if (twitchOAuthToken.refresh_token && TWITCH_CLIENT_SECRET) {
+      try {
+        console.log('🔄 Refreshing Twitch access token...');
+        const response = await axios.post('https://id.twitch.tv/oauth2/token', null, {
+          params: {
+            client_id: TWITCH_CLIENT_ID,
+            client_secret: TWITCH_CLIENT_SECRET,
+            grant_type: 'refresh_token',
+            refresh_token: twitchOAuthToken.refresh_token,
+          },
+        });
 
-  // If we don't have a token yet, try polling or initiating device flow
-  if (!twitchOAuthToken) {
-    if (!twitchDeviceCode) {
-      await initiateTwitchDeviceAuth();
-    } else {
-      await pollTwitchDeviceAuth();
+        twitchOAuthToken = {
+          access_token: response.data.access_token,
+          refresh_token: response.data.refresh_token || twitchOAuthToken.refresh_token,
+          token_type: response.data.token_type,
+          expires_in: response.data.expires_in,
+          expires_at: Date.now() + response.data.expires_in * 1000,
+        };
+        saveSubscriptions();
+        console.log('✓ Twitch access token refreshed successfully');
+        return twitchOAuthToken.access_token;
+      } catch (error) {
+        console.error('Error refreshing Twitch token:', error);
+        // If refresh fails, we might need to re-auth
+        twitchOAuthToken = null;
+        saveSubscriptions();
+      }
     }
   }
 
-  return twitchOAuthToken?.access_token || null;
+  return null;
 }
 
 // Setup page HTML
@@ -481,6 +509,44 @@ async function checkForLiveStreams() {
   }
 }
 
+app.get('/twitch/callback', async (req, res) => {
+  const { code } = req.query;
+  if (!code || !TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) {
+    return res.status(400).send('Missing code or configuration');
+  }
+
+  try {
+    const response = await axios.post('https://id.twitch.tv/oauth2/token', null, {
+      params: {
+        client_id: TWITCH_CLIENT_ID,
+        client_secret: TWITCH_CLIENT_SECRET,
+        code: code as string,
+        grant_type: 'authorization_code',
+        redirect_uri: REDIRECT_URI,
+      },
+    });
+
+    twitchOAuthToken = {
+      access_token: response.data.access_token,
+      refresh_token: response.data.refresh_token,
+      token_type: response.data.token_type,
+      expires_in: response.data.expires_in,
+      expires_at: Date.now() + response.data.expires_in * 1000,
+    };
+    saveSubscriptions();
+    
+    if (!twitchCheckInterval) {
+      twitchCheckInterval = setInterval(checkForLiveStreams, TWITCH_CHECK_INTERVAL);
+    }
+    
+    res.send('✓ Twitch authorization successful! You can close this window.');
+    console.log('✓ Obtained Twitch OAuth token via Authorization Code Flow');
+  } catch (error) {
+    console.error('Error exchanging code for token:', error);
+    res.status(500).send('Authentication failed');
+  }
+});
+
 // Initialize Discord bot if credentials exist
 async function initializeBot() {
   if (DISCORD_TOKEN && YOUTUBE_API_KEY && !client) {
@@ -572,25 +638,13 @@ async function initializeBot() {
           return;
         }
         
-        if (twitchOAuthToken && twitchOAuthToken.expires_at > Date.now()) {
+        if (twitchOAuthToken && twitchOAuthToken.expires_at > Date.now() + 60000) {
           await message.reply('✓ You are already authenticated with Twitch!');
           return;
         }
         
-        if (!twitchDeviceCode) {
-          await initiateTwitchDeviceAuth();
-        } else {
-          // Try polling in case they just authorized
-          await pollTwitchDeviceAuth();
-          if (twitchOAuthToken) {
-            await message.reply('✓ Authorization successful! You can now use Twitch commands.');
-            return;
-          }
-        }
-        
-        if (twitchDeviceAuthUrl) {
-          await message.reply(`🔐 **Twitch Authorization**\nGo to: ${twitchDeviceAuthUrl}\nEnter the code shown and authorize the bot.\nOnce authorized, you can use Twitch commands!`);
-        }
+        const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${TWITCH_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=user:read:email`;
+        await message.reply(`🔐 **Twitch Authorization**\nPlease visit the link below to authorize the bot:\n${authUrl}\n\nThis will allow the bot to automatically refresh its token so you don't have to authorize again!`);
       } else if (command === 'tsub') {
         if (!TWITCH_CLIENT_ID) {
           await message.reply('❌ Twitch integration not configured.');
