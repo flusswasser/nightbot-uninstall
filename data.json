@@ -1,0 +1,12 @@
+{
+  "uninstallRequests": {},
+  "bosses": {
+    "renalla": {
+      "id": "b320bf37-4efe-4f57-b79d-27ca0a20744b",
+      "name": "renalla",
+      "isBeaten": false,
+      "deathCount": 2,
+      "finalDeathCount": null
+    }
+  }
+}

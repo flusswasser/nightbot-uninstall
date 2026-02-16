@@ -15,14 +15,14 @@ import {
   AlertDialogTrigger 
 } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, Trash2, Copy, Check, Terminal, Skull, Trophy, ListOrdered } from "lucide-react";
+import { Loader2, Trash2, Copy, Check, Terminal, Skull, Trophy, ListOrdered, User, Settings2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { UninstallRequest, Boss } from "@shared/schema";
+import type { UninstallRequest, Boss, Player } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // --- API Info Component ---
-function ApiInfo({ type }: { type: 'uninstall' | 'death' }) {
+function ApiInfo({ type, player }: { type: 'uninstall' | 'death', player?: Player }) {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
 
@@ -33,12 +33,13 @@ function ApiInfo({ type }: { type: 'uninstall' | 'death' }) {
         { name: '!uninstall', url: apiUrl, description: "Track program uninstalls" }
       ];
     } else {
+      const playerParam = player ? `&player=${player.id}` : "";
       return [
-        { name: '!death', url: `${window.location.origin}/api/death?boss=$(query)`, description: "Add death to boss (provide name to change boss)" },
-        { name: '!deaths', url: `${window.location.origin}/api/deaths?boss=$(query)`, description: "Show current boss deaths or specific boss stats" },
-        { name: '!beaten', url: `${window.location.origin}/api/beaten?boss=$(query)`, description: "Mark boss as beaten" },
-        { name: '!totaldeaths', url: `${window.location.origin}/api/total-deaths`, description: "Total deaths across all bosses" },
-        { name: '!setdeaths', url: `${window.location.origin}/api/setdeaths?boss=$(1)&count=$(2)`, description: "Manually set death count" }
+        { name: '!death', url: `${window.location.origin}/api/death?boss=$(query)${playerParam}`, description: "Add death to boss" },
+        { name: '!deaths', url: `${window.location.origin}/api/deaths?boss=$(query)${playerParam}`, description: "Show deaths stats" },
+        { name: '!beaten', url: `${window.location.origin}/api/beaten?boss=$(query)${playerParam}`, description: "Mark boss as beaten" },
+        { name: '!totaldeaths', url: `${window.location.origin}/api/total-deaths?${playerParam.replace("&", "")}`, description: "Total deaths" },
+        { name: '!setdeaths', url: `${window.location.origin}/api/setdeaths?boss=$(1)&count=$(2)${playerParam}`, description: "Manually set deaths" }
       ];
     }
   };
@@ -80,40 +81,114 @@ function ApiInfo({ type }: { type: 'uninstall' | 'death' }) {
   );
 }
 
+// --- Player Settings ---
+function PlayerSettings({ player }: { player: Player }) {
+  const [name, setName] = useState(player.name);
+  const { toast } = useToast();
+  
+  const updateMutation = useMutation({
+    mutationFn: async (newName: string) => {
+      return await apiRequest('POST', `/api/players/${player.id}`, { name: newName });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/players'] });
+      toast({ title: "Updated", description: "Player name updated" });
+    }
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('DELETE', `/api/players/${player.id}/reset`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/bosses'] });
+      toast({ title: "Reset complete", description: `All deaths for ${player.name} have been cleared` });
+    }
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Settings2 className="h-5 w-5" /> Settings for {player.name}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex gap-2">
+          <Input value={name} onChange={e => setName(e.target.value)} placeholder="Player name..." />
+          <Button onClick={() => updateMutation.mutate(name)} disabled={updateMutation.isPending}>
+            Update Name
+          </Button>
+        </div>
+        
+        <div className="pt-4 border-t">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" className="w-full" disabled={resetMutation.isPending}>
+                <Trash2 className="mr-2 h-4 w-4" /> Reset All Deaths for {player.name}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete all death records for {player.name}. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => resetMutation.mutate()} className="bg-destructive text-destructive-foreground">
+                  Reset Data
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // --- Death Counter Dashboard ---
-function DeathCounter() {
-  const { data: bosses, isLoading } = useQuery<Boss[]>({ queryKey: ['/api/bosses'] });
+function DeathCounter({ player }: { player: Player }) {
+  const { data: bosses, isLoading } = useQuery<Boss[]>({ 
+    queryKey: ['/api/bosses', { player: player.id }],
+    queryFn: () => fetch(`/api/bosses?player=${player.id}`).then(res => res.json())
+  });
   
   return (
     <div className="space-y-6">
       <div className="grid md:grid-cols-2 gap-6">
-        <ApiInfo type="death" />
-        <Card>
-          <CardHeader>
-            <CardTitle>Current Status</CardTitle>
-            <CardDescription>Active boss tracking</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? <Loader2 className="animate-spin" /> : (
-              <div className="space-y-4">
-                {bosses?.filter(b => !b.isBeaten).map(boss => (
-                  <div key={boss.id} className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                    <div>
-                      <p className="text-lg font-bold">{boss.name}</p>
-                      <p className="text-sm text-muted-foreground">Currently Fighting</p>
+        <ApiInfo type="death" player={player} />
+        <div className="space-y-6">
+          <PlayerSettings player={player} />
+          <Card>
+            <CardHeader>
+              <CardTitle>Current Status</CardTitle>
+              <CardDescription>Active boss tracking for {player.name}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? <Loader2 className="animate-spin" /> : (
+                <div className="space-y-4">
+                  {bosses?.filter(b => !b.isBeaten).map(boss => (
+                    <div key={boss.id} className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                      <div>
+                        <p className="text-lg font-bold">{boss.name}</p>
+                        <p className="text-sm text-muted-foreground">Currently Fighting</p>
+                      </div>
+                      <div className="text-3xl font-black text-primary">{boss.deathCount}</div>
                     </div>
-                    <div className="text-3xl font-black text-primary">{boss.deathCount}</div>
-                  </div>
-                ))}
-                {!bosses?.some(b => !b.isBeaten) && (
-                  <div className="text-center py-8 text-muted-foreground italic">
-                    No active boss. Use !death &lt;name&gt; in chat to start one!
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                  {!bosses?.some(b => !b.isBeaten) && (
+                    <div className="text-center py-8 text-muted-foreground italic">
+                      No active boss. Use !death &lt;name&gt; in chat to start one!
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Card>
@@ -169,7 +244,6 @@ function UninstallTracker() {
 function UninstallTester() {
   const [program, setProgram] = useState("");
   const [response, setResponse] = useState("");
-  const { toast } = useToast();
 
   const mutation = useMutation({
     mutationFn: async (programName: string) => {
@@ -229,6 +303,9 @@ function RequestsTable() {
 }
 
 export default function Dashboard() {
+  const { data: players } = useQuery<Player[]>({ queryKey: ['/api/players'] });
+  const defaultPlayer = players?.find(p => p.isDefault) || players?.[0];
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -236,8 +313,8 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <Terminal className="h-10 w-10 text-primary" />
             <div>
-              <h1 className="text-3xl font-black tracking-tighter">MANGO'S TRACKER</h1>
-              <p className="text-muted-foreground text-sm uppercase tracking-widest">Twitch Community Tools</p>
+              <h1 className="text-3xl font-black tracking-tighter uppercase">Community Tracker</h1>
+              <p className="text-muted-foreground text-sm uppercase tracking-widest">Twitch Tools</p>
             </div>
           </div>
         </div>
@@ -252,7 +329,9 @@ export default function Dashboard() {
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="deaths"><DeathCounter /></TabsContent>
+          <TabsContent value="deaths">
+            {defaultPlayer ? <DeathCounter player={defaultPlayer} /> : <Loader2 className="animate-spin mx-auto" />}
+          </TabsContent>
           <TabsContent value="uninstall"><UninstallTracker /></TabsContent>
         </Tabs>
       </div>
