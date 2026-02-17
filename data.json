@@ -1,12 +1,5 @@
 {
   "uninstallRequests": {
-    "default": {
-      "twitch": {
-        "id": "1e1639e8-0157-4cba-98fa-b8f070f58d7e",
-        "programName": "twitch",
-        "count": 2
-      }
-    },
     "flusswasser": {},
     "imango69": {}
   },
@@ -18,42 +11,10 @@
       "deathCount": 2,
       "finalDeathCount": null
     },
-    "default": {},
-    "flusswasser": {
-      "rellana": {
-        "id": "41f2af86-0ab9-44ed-8b11-c0675aa1cdec",
-        "name": "rellana",
-        "isBeaten": false,
-        "deathCount": 2,
-        "finalDeathCount": null,
-        "playerId": "flusswasser"
-      },
-      "͏": {
-        "id": "bbee3286-ab81-4686-ab58-8b259ebba50f",
-        "name": "͏",
-        "isBeaten": false,
-        "deathCount": 1,
-        "finalDeathCount": null,
-        "playerId": "flusswasser"
-      }
-    },
-    "imango69": {
-      "godfrey": {
-        "id": "813cf6ce-ba0b-4130-afa7-aeee25bbcf03",
-        "name": "godfrey",
-        "isBeaten": false,
-        "deathCount": 1,
-        "finalDeathCount": null,
-        "playerId": "imango69"
-      }
-    }
+    "flusswasser": {},
+    "imango69": {}
   },
   "channels": {
-    "default": {
-      "id": "default",
-      "name": "Mango",
-      "isDefault": true
-    },
     "flusswasser": {
       "id": "flusswasser",
       "name": "Fluss",
