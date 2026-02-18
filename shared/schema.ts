@@ -22,13 +22,21 @@ export const bosses = pgTable("bosses", {
   isBeaten: boolean("is_beaten").notNull().default(false),
   deathCount: integer("death_count").notNull().default(0),
   finalDeathCount: integer("final_death_count"),
-  playerId: varchar("player_id").notNull().default("default"),
+  playerId: varchar("player_id").notNull(), // This is the channelId
+  gameId: varchar("game_id").notNull(),
 });
 
 export const players = pgTable("players", {
   id: varchar("id").primaryKey(),
   name: text("name").notNull(),
   isDefault: boolean("is_default").notNull().default(false),
+  activeGameId: varchar("active_game_id"),
+});
+
+export const games = pgTable("games", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  channelId: varchar("channel_id").notNull(),
 });
 
 export const insertBossSchema = createInsertSchema(bosses).omit({
@@ -39,7 +47,13 @@ export const insertPlayerSchema = createInsertSchema(players).omit({
   id: true,
 });
 
+export const insertGameSchema = createInsertSchema(games).omit({
+  id: true,
+});
+
 export type Boss = typeof bosses.$inferSelect;
 export type InsertBoss = z.infer<typeof insertBossSchema>;
 export type Player = typeof players.$inferSelect;
 export type InsertPlayer = z.infer<typeof insertPlayerSchema>;
+export type Game = typeof games.$inferSelect;
+export type InsertGame = z.infer<typeof insertGameSchema>;
