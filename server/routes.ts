@@ -142,12 +142,11 @@ export class FileStorage implements IStorage {
     return this.data!.channels[id];
   }
 
-  async resetChannelDeaths(id: string): Promise<void> {
+  async resetAllGames(id: string): Promise<void> {
     await this.ensureChannel(id);
-    const activeGameId = this.data!.channels[id].activeGameId;
-    if (activeGameId) {
-      this.data!.bosses[id][activeGameId] = {};
-    }
+    this.data!.bosses[id] = {};
+    this.data!.games[id] = {};
+    this.data!.channels[id].activeGameId = null;
     await writeData(this.data!);
   }
 
@@ -326,12 +325,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/channels/:id/reset", async (req, res) => {
+  app.delete("/api/channels/:id/reset-all", async (req, res) => {
     try {
-      await storage.resetChannelDeaths(req.params.id);
+      await storage.resetAllGames(req.params.id);
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: "Failed to reset channel deaths" });
+      res.status(500).json({ error: "Failed to reset all games" });
     }
   });
 

@@ -162,13 +162,15 @@ function ChannelSettings({ channel }: { channel: Channel }) {
     }
   });
 
-  const resetMutation = useMutation({
+  const resetAllMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('DELETE', `/api/channels/${channel.id}/reset`);
+      return await apiRequest('DELETE', `/api/channels/${channel.id}/reset-all`);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/games'] });
       queryClient.invalidateQueries({ queryKey: ['/api/bosses'] });
-      toast({ title: "Reset complete", description: `All deaths for ${channel.name} in the active game have been cleared` });
+      queryClient.invalidateQueries({ queryKey: ['/api/lifetime-data'] });
+      toast({ title: "Reset complete", description: `All games and deaths for ${channel.name} have been cleared` });
     }
   });
 
@@ -193,21 +195,21 @@ function ChannelSettings({ channel }: { channel: Channel }) {
         <div className="pt-3 border-t grid grid-cols-2 gap-2">
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="w-full text-[10px]" disabled={resetMutation.isPending}>
-                Reset Game
+              <Button variant="outline" size="sm" className="w-full text-[10px]" disabled={resetAllMutation.isPending}>
+                Reset All Games
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Reset Game Deaths?</AlertDialogTitle>
+                <AlertDialogTitle>Reset All Games?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will clear all death records for the active game in "{channel.id}".
+                  This will permanently clear ALL games and death records for "{channel.id}".
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => resetMutation.mutate()} className="bg-destructive text-destructive-foreground">
-                  Reset
+                <AlertDialogAction onClick={() => resetAllMutation.mutate()} className="bg-destructive text-destructive-foreground">
+                  Reset Everything
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
