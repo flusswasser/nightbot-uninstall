@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { UninstallRequest, Boss, Player as Channel, Game } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
 // --- API Info Component ---
 function ApiInfo({ type, channel }: { type: 'uninstall' | 'death', channel: Channel }) {
@@ -42,10 +43,16 @@ function ApiInfo({ type, channel }: { type: 'uninstall' | 'death', channel: Chan
     } else {
       return [
         { 
-          name: '!setgame', 
-          url: `${window.location.origin}/api/setgame?game=$(query)${channelParam}`, 
+          name: '!newgame', 
+          url: `${window.location.origin}/api/newgame?game=$(query)${channelParam}`, 
           description: "Set active game",
-          syntax: "!setgame <game name>" 
+          syntax: "!newgame <game name>" 
+        },
+        { 
+          name: '!gamebeaten', 
+          url: `${window.location.origin}/api/gamebeaten?channel=$(channel)`, 
+          description: "Mark game as beaten",
+          syntax: "!gamebeaten" 
         },
         { 
           name: '!death', 
@@ -67,9 +74,9 @@ function ApiInfo({ type, channel }: { type: 'uninstall' | 'death', channel: Chan
         },
         { 
           name: '!totaldeaths', 
-          url: `${window.location.origin}/api/total-deaths?channel=$(channel)`, 
-          description: "Total deaths in active game",
-          syntax: "!totaldeaths" 
+          url: `${window.location.origin}/api/total-deaths?game=$(query)&channel=$(channel)`, 
+          description: "Total deaths in game",
+          syntax: "!totaldeaths [game name]" 
         },
         { 
           name: '!lifetimedeaths', 
@@ -98,9 +105,6 @@ function ApiInfo({ type, channel }: { type: 'uninstall' | 'death', channel: Chan
     <Card>
       <CardHeader>
         <CardTitle>{type === 'uninstall' ? 'Uninstall Tracker' : 'Death Counter'} Nightbot Setup</CardTitle>
-        <CardDescription>
-          Commands for channel: <span className="font-bold text-primary">{channel.name}</span>
-        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {getCommands().map((cmd) => (
@@ -166,7 +170,7 @@ function ChannelSettings({ channel }: { channel: Channel }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
-          <Settings2 className="h-4 w-4" /> {channel.id} Settings
+          {channel.id} Settings
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -238,13 +242,27 @@ function DeathCounter({ channel }: { channel: Channel }) {
   });
 
   const activeGame = games?.find(g => g.id === channel.activeGameId);
+  const [selectedGameId, setSelectedGameId] = useState<string>("");
+  const displayGameId = selectedGameId || activeGame?.id;
 
   const { data: bosses, isLoading } = useQuery<Boss[]>({ 
-    queryKey: ['/api/bosses', { channel: channel.id, game: activeGame?.id }],
-    queryFn: () => fetch(`/api/bosses?channel=${channel.id}&game=${activeGame?.id}`).then(res => res.json()),
-    enabled: !!activeGame
+    queryKey: ['/api/bosses', { channel: channel.id, game: displayGameId }],
+    queryFn: () => fetch(`/api/bosses?channel=${channel.id}&game=${displayGameId}`).then(res => res.json()),
+    enabled: !!displayGameId
   });
-  
+
+  const { data: lifetimeDeaths } = useQuery<{ total: number }>({
+    queryKey: ['/api/lifetime-deaths-stat', { channel: channel.id }],
+    queryFn: async () => {
+      const res = await fetch(`/api/lifetime-deaths?channel=${channel.id}`);
+      const text = await res.text();
+      const match = text.match(/total of (\d+) times/);
+      return { total: parseInt(match?.[1] || "0") };
+    }
+  });
+
+  const gameTotalDeaths = bosses?.reduce((acc, b) => acc + b.deathCount, 0) || 0;
+
   return (
     <div className="space-y-6">
       <div className="grid md:grid-cols-2 gap-6">
@@ -254,13 +272,13 @@ function DeathCounter({ channel }: { channel: Channel }) {
              <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-sm">
-                    <Gamepad2 className="h-4 w-4" /> Active Game
+                    Active Game
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg border border-primary/10">
                     <div className="font-bold text-lg">{activeGame?.name || "None"}</div>
-                    <Badge variant="outline" className="text-[10px] uppercase tracking-widest">{activeGame ? "Tracking" : "Awaiting !setgame"}</Badge>
+                    <Badge variant="outline" className="text-[10px] uppercase tracking-widest">{activeGame ? "Tracking" : "Awaiting !newgame"}</Badge>
                   </div>
                 </CardContent>
              </Card>
@@ -273,9 +291,9 @@ function DeathCounter({ channel }: { channel: Channel }) {
               <CardDescription>Active boss tracking for {activeGame?.name || "N/A"}</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading ? <Loader2 className="animate-spin" /> : (
+              {isLoading && displayGameId === activeGame?.id ? <Loader2 className="animate-spin" /> : (
                 <div className="space-y-4">
-                  {bosses?.filter(b => !b.isBeaten).map(boss => (
+                  {bosses?.filter(b => b.gameId === activeGame?.id && !b.isBeaten).map(boss => (
                     <div key={boss.id} className="flex items-center justify-between p-4 bg-muted rounded-lg border-l-4 border-l-primary">
                       <div>
                         <p className="text-lg font-bold">{boss.name}</p>
@@ -284,9 +302,9 @@ function DeathCounter({ channel }: { channel: Channel }) {
                       <div className="text-3xl font-black text-primary">{boss.deathCount}</div>
                     </div>
                   ))}
-                  {!bosses?.some(b => !b.isBeaten) && (
-                    <div className="text-center py-8 text-muted-foreground italic">
-                      {activeGame ? "No active boss. Use !death <name> in chat!" : "Set a game using !setgame <name> first!"}
+                  {(!activeGame || !bosses?.some(b => b.gameId === activeGame?.id && !b.isBeaten)) && (
+                    <div className="text-center py-8 text-muted-foreground italic text-sm">
+                      {activeGame ? "No active boss. Use !death <name> in chat!" : "Set a game using !newgame <name> first!"}
                     </div>
                   )}
                 </div>
@@ -297,10 +315,37 @@ function DeathCounter({ channel }: { channel: Channel }) {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Boss History - {activeGame?.name || "N/A"}</CardTitle>
+        <CardHeader className="pb-0">
+          <div className="flex items-center justify-between mb-4">
+             <CardTitle>Game History</CardTitle>
+             <div className="bg-primary/10 px-3 py-1 rounded-full text-xs font-bold text-primary">
+                Lifetime Deaths: {lifetimeDeaths?.total || 0}
+             </div>
+          </div>
+          <Tabs value={displayGameId} onValueChange={setSelectedGameId} className="w-full">
+            <div className="overflow-x-auto pb-2">
+               <TabsList className="bg-muted/30 p-1 rounded-lg inline-flex">
+                 {games?.map(game => (
+                   <TabsTrigger key={game.id} value={game.id} className="text-xs font-bold px-4">
+                     {game.name}
+                   </TabsTrigger>
+                 ))}
+               </TabsList>
+            </div>
+          </Tabs>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
+          <div className="mb-6 p-4 bg-muted/50 rounded-xl flex items-center justify-between border border-border/50">
+             <div>
+                <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Total Game Deaths</p>
+                <p className="text-2xl font-black">{gameTotalDeaths}</p>
+             </div>
+             <div className="h-10 w-32 bg-primary/5 rounded-lg border border-primary/10 flex items-end justify-around p-1">
+                {bosses?.slice(0, 5).map((b, i) => (
+                   <div key={b.id} className="bg-primary/40 rounded-t-sm w-4" style={{ height: `${Math.min(100, (b.deathCount / (gameTotalDeaths || 1)) * 100)}%` }} />
+                ))}
+             </div>
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -316,11 +361,11 @@ function DeathCounter({ channel }: { channel: Channel }) {
                   <TableCell>
                     {boss.isBeaten ? (
                       <span className="flex items-center gap-1 text-green-500 font-bold uppercase text-[10px] tracking-widest">
-                        <Trophy className="h-3 w-3" /> Beaten
+                        Beaten
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-red-500 font-bold uppercase text-[10px] tracking-widest">
-                        <Skull className="h-3 w-3" /> Active
+                        Active
                       </span>
                     )}
                   </TableCell>
@@ -329,8 +374,8 @@ function DeathCounter({ channel }: { channel: Channel }) {
               ))}
               {(!bosses || bosses.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">
-                    No history yet for this game.
+                  <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic text-sm">
+                    No data for this game.
                   </TableCell>
                 </TableRow>
               )}
@@ -400,7 +445,7 @@ function UninstallTracker({ channel }: { channel: Channel }) {
                   ))}
                   {(!requests || requests.length === 0) && (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">
+                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic text-sm">
                         No requests yet.
                       </TableCell>
                     </TableRow>
@@ -415,8 +460,6 @@ function UninstallTracker({ channel }: { channel: Channel }) {
   );
 }
 
-import { Badge } from "@/components/ui/badge";
-
 export default function Dashboard() {
   const { data: channels, isLoading } = useQuery<Channel[]>({ queryKey: ['/api/channels'] });
   const [selectedChannelId, setSelectedChannelId] = useState<string>("");
@@ -424,7 +467,7 @@ export default function Dashboard() {
   const activeChannel = channels?.find(c => c.id === selectedChannelId) || channels?.find(c => c.isDefault) || channels?.[0];
 
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary/20">
+    <div className="min-h-screen bg-background text-foreground selection:bg-primary/20 font-sans">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-6 border-b pb-8">
           <div className="flex items-center gap-4">
@@ -432,16 +475,15 @@ export default function Dashboard() {
               <Terminal className="h-8 w-8 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none">Mango Tracker</h1>
-              <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-[0.3em] mt-1 opacity-60">Twitch Community Intelligence</p>
+              <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none">Nightbot Tracker</h1>
+              <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-[0.3em] mt-1 opacity-60">Twitch Command Center</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 bg-muted/50 p-2 pl-4 rounded-xl border border-border/50 backdrop-blur-sm">
               <div className="flex items-center gap-2">
-                <Hash className="h-4 w-4 text-primary" />
-                <span className="text-[10px] font-black uppercase text-muted-foreground">Select Channel</span>
+                <span className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter">Select Channel</span>
               </div>
               <Select value={activeChannel?.id} onValueChange={setSelectedChannelId}>
                 <SelectTrigger className="w-[220px] border-0 bg-background/50 shadow-sm focus:ring-0 font-bold">
@@ -469,10 +511,10 @@ export default function Dashboard() {
             <div className="flex justify-center">
                <TabsList className="grid w-full grid-cols-2 max-w-md p-1 bg-muted/50 rounded-xl border">
                 <TabsTrigger value="deaths" className="flex items-center gap-2 py-2.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold transition-all">
-                  <Skull className="h-4 w-4" /> Death Counter
+                  Death Counter
                 </TabsTrigger>
                 <TabsTrigger value="uninstall" className="flex items-center gap-2 py-2.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold transition-all">
-                  <ListOrdered className="h-4 w-4" /> Uninstall Tracker
+                  Uninstall Tracker
                 </TabsTrigger>
               </TabsList>
             </div>
