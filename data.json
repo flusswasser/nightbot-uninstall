@@ -42,7 +42,8 @@
           "playerId": "flusswasser",
           "gameId": "er"
         }
-      }
+      },
+      "wuwa": {}
     },
     "imango69": {}
   },
@@ -51,7 +52,7 @@
       "id": "flusswasser",
       "name": "Fluss",
       "isDefault": false,
-      "activeGameId": "er"
+      "activeGameId": "wuwa"
     },
     "imango69": {
       "id": "imango69",
@@ -70,7 +71,13 @@
         "id": "er",
         "name": "ER",
         "channelId": "flusswasser"
+      },
+      "wuwa": {
+        "id": "wuwa",
+        "name": "wuwa",
+        "channelId": "flusswasser"
       }
-    }
+    },
+    "imango69": {}
   }
 }

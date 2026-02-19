@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -15,13 +15,19 @@ import {
   AlertDialogTrigger 
 } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, Trash2, Copy, Check, Terminal, Skull, Trophy, ListOrdered, Settings2, Hash, Gamepad2 } from "lucide-react";
+import { Loader2, Trash2, Copy, Check, Terminal, Skull, Trophy, ListOrdered, Settings2, Hash, Gamepad2, PieChart } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { UninstallRequest, Boss, Player as Channel, Game } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { PieChart as ReChartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReChartsTooltip, Legend } from 'recharts';
+
+const CHART_COLORS = [
+  '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
+  '#FF9F40', '#FFCD56', '#C9CBCF', '#4BC0C0', '#36A2EB'
+];
 
 // --- API Info Component ---
 function ApiInfo({ type, channel }: { type: 'uninstall' | 'death', channel: Channel }) {
@@ -49,12 +55,6 @@ function ApiInfo({ type, channel }: { type: 'uninstall' | 'death', channel: Chan
           syntax: "!newgame <game name>" 
         },
         { 
-          name: '!gamebeaten', 
-          url: `${window.location.origin}/api/gamebeaten?channel=$(channel)`, 
-          description: "Mark game as beaten",
-          syntax: "!gamebeaten" 
-        },
-        { 
           name: '!death', 
           url: `${window.location.origin}/api/death?boss=$(query)${channelParam}`, 
           description: "Add death to boss",
@@ -79,16 +79,22 @@ function ApiInfo({ type, channel }: { type: 'uninstall' | 'death', channel: Chan
           syntax: "!totaldeaths [game name]" 
         },
         { 
-          name: '!lifetimedeaths', 
-          url: `${window.location.origin}/api/lifetime-deaths?channel=$(channel)`, 
-          description: "Total deaths across all games",
-          syntax: "!lifetimedeaths" 
-        },
-        { 
           name: '!setdeaths', 
           url: `${window.location.origin}/api/setdeaths?boss=$(1)&count=$(2)${channelParam}`, 
           description: "Manually set deaths",
           syntax: "!setdeaths <boss name> <count>" 
+        },
+        { 
+          name: '!gamebeaten', 
+          url: `${window.location.origin}/api/gamebeaten?channel=$(channel)`, 
+          description: "Mark game as beaten",
+          syntax: "!gamebeaten" 
+        },
+        { 
+          name: '!lifetimedeaths', 
+          url: `${window.location.origin}/api/lifetime-deaths?channel=$(channel)`, 
+          description: "Total deaths across all games",
+          syntax: "!lifetimedeaths" 
         }
       ];
     }
@@ -242,22 +248,51 @@ function DeathCounter({ channel }: { channel: Channel }) {
   });
 
   const activeGame = games?.find(g => g.id === channel.activeGameId);
-  const [selectedGameId, setSelectedGameId] = useState<string>("");
-  const displayGameId = selectedGameId || activeGame?.id;
+  const [selectedGameId, setSelectedGameId] = useState<string>("lifetime");
+  const displayGameId = selectedGameId;
 
   const { data: bosses, isLoading } = useQuery<Boss[]>({ 
     queryKey: ['/api/bosses', { channel: channel.id, game: displayGameId }],
     queryFn: () => fetch(`/api/bosses?channel=${channel.id}&game=${displayGameId}`).then(res => res.json()),
-    enabled: !!displayGameId
+    enabled: !!displayGameId && displayGameId !== "lifetime"
   });
 
-  const { data: lifetimeDeaths } = useQuery<{ total: number }>({
-    queryKey: ['/api/lifetime-deaths-stat', { channel: channel.id }],
+  // Fetch all deaths for lifetime view
+  const { data: allGamesBosses } = useQuery<Record<string, Boss[]>>({
+    queryKey: ['/api/lifetime-data', { channel: channel.id }],
     queryFn: async () => {
-      const res = await fetch(`/api/lifetime-deaths?channel=${channel.id}`);
-      const text = await res.text();
-      const match = text.match(/total of (\d+) times/);
-      return { total: parseInt(match?.[1] || "0") };
+      const gRes = await fetch(`/api/games?channel=${channel.id}`);
+      const gList: Game[] = await gRes.json();
+      const results: Record<string, Boss[]> = {};
+      for (const g of gList) {
+        const bRes = await fetch(`/api/bosses?channel=${channel.id}&game=${g.id}`);
+        results[g.id] = await bRes.json();
+      }
+      return results;
+    },
+    enabled: displayGameId === "lifetime"
+  });
+
+  const lifetimeData = useMemo(() => {
+    if (!allGamesBosses || !games) return [];
+    return games.map((g, idx) => ({
+      id: g.id,
+      name: g.name,
+      deaths: allGamesBosses[g.id]?.reduce((sum, b) => sum + b.deathCount, 0) || 0,
+      color: CHART_COLORS[idx % CHART_COLORS.length]
+    })).sort((a, b) => b.deaths - a.deaths);
+  }, [allGamesBosses, games]);
+
+  const totalLifetimeDeaths = lifetimeData.reduce((sum, d) => sum + d.deaths, 0);
+
+  const deleteGameMutation = useMutation({
+    mutationFn: async (gameId: string) => {
+      await apiRequest('DELETE', `/api/games/${gameId}?channel=${channel.id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/games'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/lifetime-data'] });
+      if (selectedGameId !== "lifetime") setSelectedGameId("lifetime");
     }
   });
 
@@ -318,13 +353,13 @@ function DeathCounter({ channel }: { channel: Channel }) {
         <CardHeader className="pb-0">
           <div className="flex items-center justify-between mb-4">
              <CardTitle>Game History</CardTitle>
-             <div className="bg-primary/10 px-3 py-1 rounded-full text-xs font-bold text-primary">
-                Lifetime Deaths: {lifetimeDeaths?.total || 0}
-             </div>
           </div>
           <Tabs value={displayGameId} onValueChange={setSelectedGameId} className="w-full">
             <div className="overflow-x-auto pb-2">
                <TabsList className="bg-muted/30 p-1 rounded-lg inline-flex">
+                 <TabsTrigger value="lifetime" className="text-xs font-bold px-4">
+                    Lifetime Deaths
+                 </TabsTrigger>
                  {games?.map(game => (
                    <TabsTrigger key={game.id} value={game.id} className="text-xs font-bold px-4">
                      {game.name}
@@ -335,52 +370,140 @@ function DeathCounter({ channel }: { channel: Channel }) {
           </Tabs>
         </CardHeader>
         <CardContent className="pt-6">
-          <div className="mb-6 p-4 bg-muted/50 rounded-xl flex items-center justify-between border border-border/50">
-             <div>
-                <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Total Game Deaths</p>
-                <p className="text-2xl font-black">{gameTotalDeaths}</p>
-             </div>
-             <div className="h-10 w-32 bg-primary/5 rounded-lg border border-primary/10 flex items-end justify-around p-1">
-                {bosses?.slice(0, 5).map((b, i) => (
-                   <div key={b.id} className="bg-primary/40 rounded-t-sm w-4" style={{ height: `${Math.min(100, (b.deathCount / (gameTotalDeaths || 1)) * 100)}%` }} />
-                ))}
-             </div>
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Boss Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Deaths</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {bosses?.sort((a,b) => b.deathCount - a.deathCount).map((boss) => (
-                <TableRow key={boss.id}>
-                  <TableCell className="font-bold">{boss.name}</TableCell>
-                  <TableCell>
-                    {boss.isBeaten ? (
-                      <span className="flex items-center gap-1 text-green-500 font-bold uppercase text-[10px] tracking-widest">
-                        Beaten
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-red-500 font-bold uppercase text-[10px] tracking-widest">
-                        Active
-                      </span>
+          {displayGameId === "lifetime" ? (
+            <div className="space-y-8">
+              <div className="flex flex-col md:flex-row gap-8 items-center">
+                <div className="flex-1 space-y-4 w-full">
+                  <div className="p-4 bg-muted/50 rounded-xl border border-border/50">
+                    <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Lifetime Deaths</p>
+                    <p className="text-4xl font-black">{totalLifetimeDeaths}</p>
+                  </div>
+                  <div className="space-y-2">
+                    {lifetimeData.map((d) => (
+                      <div key={d.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors group">
+                        <div className="flex items-center gap-3">
+                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} />
+                           <button 
+                             onClick={() => setSelectedGameId(d.id)}
+                             className="font-bold text-sm hover:text-primary transition-colors text-left"
+                           >
+                             {d.name}
+                           </button>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <span className="font-black text-lg">{d.deaths}</span>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete {d.name}?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will permanently remove this game and all its death records.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={() => deleteGameMutation.mutate(d.id)}
+                                  className="bg-destructive text-destructive-foreground"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
+                    ))}
+                    {lifetimeData.length === 0 && (
+                      <p className="text-center py-8 text-muted-foreground italic text-sm">No games tracked yet.</p>
                     )}
-                  </TableCell>
-                  <TableCell className="text-right font-black text-lg">{boss.deathCount}</TableCell>
-                </TableRow>
-              ))}
-              {(!bosses || bosses.length === 0) && (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic text-sm">
-                    No data for this game.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                  </div>
+                </div>
+                {lifetimeData.length > 0 && (
+                  <div className="w-full md:w-[300px] h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ReChartsPieChart>
+                        <Pie
+                          data={lifetimeData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="deaths"
+                        >
+                          {lifetimeData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <ReChartsTooltip 
+                          contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
+                          itemStyle={{ color: 'hsl(var(--foreground))' }}
+                        />
+                      </ReChartsPieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mb-6 p-4 bg-muted/50 rounded-xl flex items-center justify-between border border-border/50">
+                 <div>
+                    <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Total Game Deaths</p>
+                    <p className="text-2xl font-black">{gameTotalDeaths}</p>
+                 </div>
+                 <Button 
+                   variant="ghost" 
+                   size="sm" 
+                   className="text-muted-foreground hover:text-destructive gap-2"
+                   onClick={() => deleteGameMutation.mutate(displayGameId)}
+                 >
+                   <Trash2 className="h-4 w-4" /> Delete Game
+                 </Button>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Boss Name</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Deaths</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bosses?.sort((a,b) => b.deathCount - a.deathCount).map((boss) => (
+                    <TableRow key={boss.id}>
+                      <TableCell className="font-bold">{boss.name}</TableCell>
+                      <TableCell>
+                        {boss.isBeaten ? (
+                          <span className="flex items-center gap-1 text-green-500 font-bold uppercase text-[10px] tracking-widest">
+                            Beaten
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-red-500 font-bold uppercase text-[10px] tracking-widest">
+                            Active
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-black text-lg">{boss.deathCount}</TableCell>
+                    </TableRow>
+                  ))}
+                  {(!bosses || bosses.length === 0) && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic text-sm">
+                        No data for this game.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

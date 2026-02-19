@@ -168,6 +168,18 @@ export class FileStorage implements IStorage {
     return Object.values(this.data!.games[channelId]);
   }
 
+  async deleteGame(channelId: string, gameId: string): Promise<void> {
+    await this.ensureChannel(channelId);
+    if (this.data!.games[channelId][gameId]) {
+      delete this.data!.games[channelId][gameId];
+      delete this.data!.bosses[channelId][gameId];
+      if (this.data!.channels[channelId].activeGameId === gameId) {
+        this.data!.channels[channelId].activeGameId = null;
+      }
+      await writeData(this.data!);
+    }
+  }
+
   async setActiveGame(channelId: string, gameName: string): Promise<Game> {
     await this.ensureChannel(channelId);
     const normalizedGameName = gameName.toLowerCase().trim();
@@ -357,6 +369,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(games);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch games" });
+    }
+  });
+
+  app.delete("/api/games/:id", async (req, res) => {
+    const gameId = req.params.id;
+    const channelId = (req.query.channel as string) || "default";
+    try {
+      await storage.deleteGame(channelId, gameId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete game" });
     }
   });
 
