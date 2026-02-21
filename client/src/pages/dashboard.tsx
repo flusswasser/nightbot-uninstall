@@ -286,6 +286,8 @@ function DeathCounter({ channel }: { channel: Channel }) {
   }, [allGamesBosses, games]);
 
   const totalLifetimeDeaths = lifetimeData.reduce((sum, d) => sum + d.deaths, 0);
+  const averageDeathsPerGame = lifetimeData.length > 0 ? (totalLifetimeDeaths / lifetimeData.length).toFixed(1) : 0;
+  const mostDeadlyGame = lifetimeData.length > 0 ? lifetimeData[0] : null;
 
   const deleteGameMutation = useMutation({
     mutationFn: async (gameId: string) => {
@@ -385,12 +387,24 @@ function DeathCounter({ channel }: { channel: Channel }) {
         <CardContent className="pt-6">
           {displayGameId === "lifetime" ? (
             <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="p-4 bg-primary/5 rounded-xl border border-primary/10">
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Lifetime Deaths</p>
+                  <p className="text-4xl font-black text-primary">{totalLifetimeDeaths}</p>
+                </div>
+                <div className="p-4 bg-muted/50 rounded-xl border border-border/50">
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Avg Deaths / Game</p>
+                  <p className="text-4xl font-black">{averageDeathsPerGame}</p>
+                </div>
+                <div className="p-4 bg-muted/50 rounded-xl border border-border/50">
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Most Deadly</p>
+                  <p className="text-xl font-black truncate">{mostDeadlyGame?.name || "None"}</p>
+                  <p className="text-xs font-bold text-muted-foreground">{mostDeadlyGame?.deaths || 0} deaths</p>
+                </div>
+              </div>
+
               <div className="flex flex-col md:flex-row gap-8 items-center">
                 <div className="flex-1 space-y-4 w-full">
-                  <div className="p-4 bg-muted/50 rounded-xl border border-border/50">
-                    <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Lifetime Deaths</p>
-                    <p className="text-4xl font-black">{totalLifetimeDeaths}</p>
-                  </div>
                   <div className="space-y-2">
                     {lifetimeData.map((d) => (
                       <div key={d.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors group">
@@ -490,8 +504,15 @@ function DeathCounter({ channel }: { channel: Channel }) {
                 </TableHeader>
                 <TableBody>
                   {bosses?.sort((a,b) => b.deathCount - a.deathCount).map((boss) => (
-                    <TableRow key={boss.id} className="group">
-                      <TableCell className="font-bold">{boss.name}</TableCell>
+                    <TableRow key={boss.id} className={`group ${!boss.isBeaten && boss.deathCount > 10 ? 'bg-destructive/5' : ''}`}>
+                      <TableCell className="font-bold">
+                        <div className="flex items-center gap-2">
+                          {boss.name}
+                          {!boss.isBeaten && boss.deathCount >= 20 && (
+                            <Badge variant="destructive" className="h-4 text-[8px] px-1 uppercase animate-pulse">Roadblock</Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         {boss.isBeaten ? (
                           <span className="flex items-center gap-1 text-green-500 font-bold uppercase text-[10px] tracking-widest">
